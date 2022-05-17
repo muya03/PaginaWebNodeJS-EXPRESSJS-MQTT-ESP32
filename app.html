@@ -1,0 +1,172 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charSset=utf-8">
+<title>DATOS DEL COCHE</title>
+
+
+<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.2/mqttws31.js"></script>
+<script type="text/javascript">
+
+/*  
+	Mohamed Al Howaidi Nasralla
+*/
+
+//CONFIGURACIONES
+	var MQTTbroker = 'localhost';
+	var MQTTport = 9004;
+	var MQTTsubTopic = 'Test/Velocidad'; 
+	var MQTTsubTopic2 = 'Test/Fuerzas_G';
+	var MQTTsubTopic3 = 'Test/Aceleracón';
+	var MQTTsubTopic4 = 'Test/Marchas';
+	var MQTTsubTopic5 = 'Test/Temperatura';
+
+	var chart; // VARIABLE GLOBAR. NO CAMBIAR
+	var dataTopics = new Array();
+
+//BROKER DE MQTT 
+	var client = new Paho.MQTT.Client(MQTTbroker, MQTTport,
+				"myclientid_" + parseInt(Math.random() * 100, 10));
+	client.onMessageArrived = onMessageArrived;
+	client.onConnectionLost = onConnectionLost;
+	//CONECTARSE AL BROKER ESTA EN EL BOTN INNIT DE ABAJO, CUIDADO!!!!
+	
+
+//CONEXIONES A MQTT Y SUBSCRIPCIONES A LOS TÓPICOS
+	var options = {
+		timeout: 3,
+		onSuccess: function () {
+			console.log("mqtt connected");
+			//DE AQUI LA CONEXION AL BROKER ES CORRECTA
+			client.subscribe(MQTTsubTopic, {qos: 1});
+			client.subscribe(MQTTsubTopic2, {qos: 1});
+			client.subscribe(MQTTsubTopic3, {qos: 1});
+			client.subscribe(MQTTsubTopic4, {qos: 1});
+			client.subscribe(MQTTsubTopic5, {qos: 1});
+		},
+		onFailure: function (message) {
+			console.log("Connection failed, ERROR: " + message.errorMessage);
+			//window.setTimeout(location.reload(),20000); //ESPERA 20 SEG ANTES DE INTENTAR RECARGAR Y CONECTARSE NUEVAMENTE.
+		}
+	};
+
+//RECONECTA SI SE PIERDE LA CONEXIÓN 
+	function onConnectionLost(responseObject) {
+		console.log("connection lost: " + responseObject.errorMessage);
+		//window.setTimeout(location.reload(),20000); //ESPERA 20 SEG ANTES DE INTENTAR RECARGAR Y CONECTARSE NUEVAMENTE..
+	};
+
+//DESUES DE QUE LLEGUE UN MENSAJE
+	function onMessageArrived(message) {
+		console.log(message.destinationName, '',message.payloadString);
+
+		//Ver si hay un nuevo toṕico. Si lo hay lo añade a la lista
+		if (dataTopics.indexOf(message.destinationName) < 0){
+		    
+		    dataTopics.push(message.destinationName); //añade el nuevo tópico a la lista
+		    var y = dataTopics.indexOf(message.destinationName); //Coge el numero del índice
+		    
+		    //Crea un nuevo gráfico (linea de grafico) para el nuevo tópico
+			var newseries = {
+		            id: y,
+		            name: message.destinationName,
+		            data: []
+		            };
+
+			chart.addSeries(newseries); //lo añade a las graficas
+		    
+		    };
+		 
+		var y = dataTopics.indexOf(message.destinationName); //coge el indice del tópico desde la lista
+		var myEpoch = new Date().getTime(); //coge el tiempo exacto de cuando llega
+		var thenum = message.payloadString.replace( /^\D+/g, ''); //quita los espacios, si los hay
+		var plotMqtt = [myEpoch, Number(thenum)]; //crea la matriz
+		if (isNumber(thenum)) { //chequea si es un numero o un texto
+			console.log('is a propper number, will send to chart.')
+			plot(plotMqtt, y);	//lo envía al plot (la función plot es la funcion de creación de los nuevos puntos de la grafica)
+		}
+		else {
+			console.log('casi crak') //No se ha añadido el dato
+		};
+	};
+
+//chequea si es un número real
+	function isNumber(n) {
+	  return !isNaN(parseFloat(n)) && isFinite(n);
+	};
+
+//funcion que lo carga todo cuando se carga el documento
+	function init() {
+
+		//Si hay problemas con las zonas horarias simplemente se pone esto a false
+		Highcharts.setOptions({
+			global: {
+				useUTC: true
+			}
+		});
+
+		// Se conecta al broker
+		client.connect(options);
+
+	};
+
+
+//añade la función plots a la grafica
+    function plot(point, chartno) {
+    	console.log(point);
+    	
+	        var series = chart.series[0],
+	            shift = series.data.length > 20; // cambia las series (lineas)
+	                                             // si son mas grande que 20
+	        // añade el nuevo punto que ha llegado
+	        chart.series[chartno].addPoint(point, true, shift);  
+
+	};
+
+//configuracinoes de la grafica en general
+	$(document).ready(function() {
+	    chart = new Highcharts.Chart({
+	        chart: {
+	            renderTo: 'container',
+	            defaultSeriesType: 'line'
+	        },
+	        title: {
+	            text: 'Datos del coche en tiempo real'
+	        },
+	        subtitle: {
+                                text: 'broker: ' + MQTTbroker + ' | port: ' + MQTTport + ' | topic : ' + MQTTsubTopic
+                        },
+	        xAxis: {
+	            type: 'datetime',
+	            tickPixelInterval: 150,
+	            maxZoom: 2 * 1000
+	        },
+	        yAxis: {
+	            minPadding: 0.2,
+	            maxPadding: 0.2,
+	            title: {
+	                text: 'Value',
+	                margin: 80
+	            }
+	        },
+	        series: []
+	    });        
+	});
+
+</script>
+
+<script src="http://code.highcharts.com/stock/highstock.js"></script>
+<script src="http://code.highcharts.com/stock/modules/exporting.js"></script>
+
+
+
+</head>
+<body>
+<body onload="init();"><!--Empieaz cuando le empiezan a llegar datos desde el broker-->
+
+
+
+<div id="container" style="height: 500px; min-width: 500px"></div><!-- el placeholder de la gráfica-->
+
+	</body>
+</html>
