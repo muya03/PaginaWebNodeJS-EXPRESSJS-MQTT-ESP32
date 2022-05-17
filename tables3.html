@@ -1,0 +1,414 @@
+<!doctype html>
+<html><head>
+    <meta charset="utf-8">
+    <title>DASHBOARD</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="">
+    <meta name="author" content="Mohamed AL Howaidi">
+
+    <!-- Los ESTILOS -->
+    <link rel="stylesheet" type="text/css" href="bootstrap/css/bootstrap.min.css" />
+
+    <!-- TABLA DE DATOS CSS -->
+    <link href="css/table.css" rel="stylesheet">
+
+    <script type="text/javascript" src="js/jquery.js"></script>    
+    <script type="text/javascript" src="bootstrap/js/bootstrap.min.js"></script>
+
+    <script type="text/javascript" src="js/admin.js"></script>
+
+    <style type="text/css">
+      body {
+        padding-top: 60px;
+      }
+    </style>
+        
+  	<!-- LLAMAMOS A LAS FUENTES DE GOOGLE. OPEN SANS -->
+  	<link href="http://fonts.googleapis.com/css?family=Open+Sans" rel="stylesheet" type="text/css">
+
+  	<!-- INICIALIZO LA TABLA DE DATOS -->
+    <script type="text/javascript" src="js/datatables/jquery.dataTables.js"></script>
+  			<script type="text/javascript" charset="utf-8">
+  			    $(document).ready(function () {
+  			        $('#dt1').dataTable();
+  			    });
+	</script>
+
+<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.2/mqttws31.js"></script>
+<script type="text/javascript">
+/*
+  Mohamed Al Howaidi Nasralla
+*/
+
+//settings BEGIN
+  var MQTTbroker = 'localhost';
+  var MQTTport = 9004;
+  var MQTTsubTopic = 'Test/#'; //works with wildcard # and + topics dynamically now
+//settings END
+
+  var chart; // global variuable for chart
+  var dataTopics = new Array();
+
+//mqtt broker 
+  var client = new Paho.MQTT.Client(MQTTbroker, MQTTport,
+        "myclientid_" + parseInt(Math.random() * 100, 10));
+  client.onMessageArrived = onMessageArrived;
+  client.onConnectionLost = onConnectionLost;
+  //connect to broker is at the bottom of the init() function !!!!
+  
+
+//mqtt connecton options including the mqtt broker subscriptions
+  var options = {
+    timeout: 3,
+    onSuccess: function () {
+      console.log("mqtt connected");
+      // Connection succeeded; subscribe to our topics
+      client.subscribe(MQTTsubTopic, {qos: 1});
+    },
+    onFailure: function (message) {
+      console.log("Connection failed, ERROR: " + message.errorMessage);
+      //window.setTimeout(location.reload(),20000); //wait 20seconds before trying to connect again.
+    }
+  };
+
+//can be used to reconnect on connection lost
+  function onConnectionLost(responseObject) {
+    console.log("connection lost: " + responseObject.errorMessage);
+    //window.setTimeout(location.reload(),20000); //wait 20seconds before trying to connect again.
+  };
+
+//what is done when a message arrives from the broker
+  function onMessageArrived(message) {
+    console.log(message.destinationName, '',message.payloadString);
+
+    //check if it is a new topic, if not add it to the array
+    if (dataTopics.indexOf(message.destinationName) < 0){
+        
+        dataTopics.push(message.destinationName); //add new topic to array
+        var y = dataTopics.indexOf(message.destinationName); //get the index no
+        
+        //create new data series for the chart
+      var newseries = {
+                id: y,
+                name: message.destinationName,
+                data: []
+                };
+
+      chart.addSeries(newseries); //add the series
+        
+        };
+     
+    var y = dataTopics.indexOf(message.destinationName); //get the index no of the topic from the array
+    var myEpoch = new Date().getTime(); //get current epoch time
+    var thenum = message.payloadString.replace( /^\D+/g, ''); //remove any text spaces from the message
+    var plotMqtt = [myEpoch, Number(thenum)]; //create the array
+    if (isNumber(thenum)) { //check if it is a real number and not text
+      console.log('is a propper number, will send to chart.')
+      plot(plotMqtt, y);  //send it to the plot function
+    }
+    else {
+      console.log('casi crak')
+    };
+  };
+
+//check if a real number  
+  function isNumber(n) {
+    return !isNaN(parseFloat(n)) && isFinite(n);
+  };
+
+//function that is called once the document has loaded
+  function init() {
+
+    //i find i have to set this to false if i have trouble with timezones.
+    Highcharts.setOptions({
+      global: {
+        useUTC: false
+      }
+    });
+
+    // Connect to MQTT broker
+    client.connect(options);
+
+  };
+
+
+//this adds the plots to the chart  
+    function plot(point, chartno) {
+      console.log(point);
+      
+          var series = chart.series[0],
+              shift = series.data.length > 20; // shift if the series is 
+                                               // longer than 20
+          // add the point
+          chart.series[chartno].addPoint(point, true, shift);  
+
+  };
+
+//settings for the chart
+  $(document).ready(function() {
+      chart = new Highcharts.Chart({
+          chart: {
+              renderTo: 'container',
+              defaultSeriesType: 'spline'
+          },
+          title: {
+              text: 'Plotting Live websockets data from a MQTT topic'
+          },
+          subtitle: {
+                                text: 'broker: ' + MQTTbroker + ' | port: ' + MQTTport + ' | topic : ' + MQTTsubTopic
+                        },
+          xAxis: {
+              type: 'datetime',
+              tickPixelInterval: 150,
+              maxZoom: 20 * 1000
+          },
+          yAxis: {
+              minPadding: 0.2,
+              maxPadding: 0.2,
+              title: {
+                  text: 'Value',
+                  margin: 80
+              }
+          },
+          series: []
+      });        
+  });
+
+</script>
+
+<script src="http://code.highcharts.com/stock/highstock.js"></script>
+<script src="http://code.highcharts.com/stock/modules/exporting.js"></script>
+    
+  </head>
+  <body onload="init();">
+  
+  	<!-- El MENU -->
+
+    <div class="navbar-nav navbar-inverse navbar-fixed-top">
+        <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="index.html"><img src="images/logo30.png" alt="">Dashboard</a>
+        </div> 
+          <div class="navbar-collapse collapse">
+            <ul class="nav navbar-nav">
+               <li><a href="index.html"><i class="icon-home icon-white"></i> Inicio</a></li>                            
+              <li class="active"><a href="tables.html"><i class="icon-th icon-white"></i> Tablas</a></li>
+
+            </ul>
+          </div>
+        </div>
+    </div>
+
+    <div class="container">
+
+      <!-- CONTENIDO -->
+	<div class="row">
+		<div class="col-sm-12 col-lg-12">
+			<h4><strong>Table Básica</strong></h4>
+			  <table class="display">
+	          <thead>
+	            <tr>
+	              <th>ID</th>
+	              <th>Revoluciones</th>
+	              <th>Tiempo</th>
+	            </tr>
+	          </thead>
+	          <tbody>
+	            <tr class="odd">
+	              <td class="center">1</td>
+	              <td class="center">3000 RPM</td>
+	              <td class="center">17:34:45</td>
+	            </tr>
+	            <tr class="even">
+	               <td class="center">2</td>
+                <td class="center">3632 RPM</td>
+                <td class="center">17:35:23</td>
+	            </tr>
+	            <tr class="odd">
+	             <td class="center">3</td>
+                <td class="center">3848RPM</td>
+                <td class="center">17:35:36</td>
+	            </tr>
+	            <tr class="even">
+	               <td class="center">4</td>
+                <td class="center">6349 RPM</td>
+                <td class="center">17:36:25</td>
+	            </tr>
+	            <tr class="odd">
+	               <td class="center">5</td>
+                <td class="center">3352 RPM</td>
+                <td class="center">17:36:21</td>
+	            </tr>
+	          </tbody>
+	         </table><!--/Fin de la primera Tabla -->
+			 <br>
+			 <!--Segunda Tabla -->
+
+
+		<h4><strong>Tabla de Datos</strong></h4>
+    
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col">
+               <table id="tablaArticulos" class="table table-striped table-bordered" style="width:100%">
+               <thead>
+                 <tr>
+                    <th>REFERENCIA</th>
+                    <th>VELOCIDAD</th>
+                    <th>ESTADO</th>                                                    
+                </tr>
+               </thead>
+               <tbody>
+               </tbody>
+               </table> 
+               <div id="container" style="height: 500px; min-width: 500px"></div>
+                <button onclick="exportTableToCSV('datos.csv')">Descarga en CSV </button>   
+            </div>
+        </div>
+    </div>
+<!--/FIN DE LA SEGUNDA TABLA -->
+	
+		</div><!--/span12 -->
+      </div><!-- /FIla -->
+     </div> <!-- /Contenedor -->
+    	<br>	
+      	</div><!-- /Contenedor -->
+      	<br>
+       
+	<!-- PIE DE PAGINA -->	
+	<div id="footerwrap">
+      	<footer class="clearfix"></footer>
+      	<div class="container">
+      		<div class="row">
+      			<div class="col-sm-12 col-lg-12">
+      			<p><img src="images/logo.png"" alt=""></p>
+      			<p>UJIMOTORTSPORT ELECTRONIC DEPARTMENT</p>
+      			</div>
+
+      		</div><!-- /fin de la fila -->
+      	</div><!-- /fin del contenedor -->		
+	</div><!-- /fin del pie de pagina -->
+<script type="text/javascript" language="javascript" src="https://code.jquery.com/jquery-3.5.1.js"></script>
+<script type="text/javascript" language="javascript" src="https://cdn.datatables.net/1.10.22/js/jquery.dataTables.min.js"></script>
+<script type="text/javascript" language="javascript" src="https://cdn.datatables.net/1.10.22/js/dataTables.bootstrap5.min.js"></script> <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> 
+<!-- Ver el orden que se hace aquí y cloesar el ultimo de aqui en el fichjero de javascript del server. El resto no se closea porque luego hay errores, closean la query y una vez closeada no puedes sacar datos -->      
+<script>
+     $(document).ready(function() {
+          
+
+          const velocidad = {
+                  label: "Velocidad",
+                  backgroundColor: ['#6bf1ab','#63d69f', '#438c6c', '#509c7f', '#1f794e', '#34444c', '#90CAF9', '#64B5F6', '#42A5F5', '#2196F3', '#0D47A1'],
+                  borderColor: ['black'],
+                  borderWidth: 1,
+              };
+
+              const estado = {
+                  label: "Estado",
+                  backgroundColor: ['#6bf1ab','#63d69f', '#438c6c', '#509c7f', '#1f794e', '#34444c', '#90CAF9', '#64B5F6', '#42A5F5', '#2196F3', '#0D47A1'],
+                  borderColor: ['brown'],
+                  borderWidth: 1,
+              };
+
+              var ctx = document.getElementById('myChart')
+              var myChart = new Chart(ctx, {
+                  type:'line',
+                  data:{
+                      datasets: [
+                          estado,
+                          velocidad,
+                      ]
+                  },
+                  options:{
+                      scales:{
+                          y:{
+                              beginAtZero:true
+                          }
+                      }
+                  }
+              })
+
+          //let url2 = 'http://localhost:3000/my_db/datos'
+          let url2 = 'http://localhost:3001/mqtt/datos'
+
+          fetch(url2)
+                  .then( response => response.json() )
+                  .then( datos => mostrar(datos) )
+                  .catch( error => console.log(error) )
+
+
+              const mostrar = (articulos) =>{
+                  articulos.forEach(element => {
+                      myChart.data['labels'].push(element.Marchas)
+                      myChart.data['datasets'][1].data.push(element.Velocidad)
+                      myChart.data['datasets'][0].data.push(element.Aceleracón)
+                      //myChart.data['datasets'][0].data.push(v)
+                      //myChart.data['datasets'][1].data.push(e)
+                      myChart.update()
+                  });
+                  console.log(myChart.data)
+              }
+          //var url = 'http://localhost:3000/my_db/datos2';
+           var url = 'http://localhost:3001/mqtt/datos2';
+          $('Test/').DataTable({            
+              "ajax":{
+                  "url": url,
+                  "dataSrc":""
+              },
+              "columns":[
+                  {"data":"Marchas"},
+                  {"data":"Velocidad"},
+                  {"data":"Aceleracón"},    
+              ],
+              "columnDefs":[{
+                  "targets":[2],
+                  render(v){
+                      return Number(v).toFixed(2)
+                  }
+              }]
+          });
+    });
+     
+</script>
+<script>
+  //user-defined function to download CSV file  
+function downloadCSV(csv, filename) {  
+    var csvFile;  
+    var downloadLink;  
+     
+    //define the file type to text/csv  
+    csvFile = new Blob([csv], {type: 'text/csv'});  
+    downloadLink = document.createElement("a");  
+    downloadLink.download = filename;  
+    downloadLink.href = window.URL.createObjectURL(csvFile);  
+    downloadLink.style.display = "none";  
+  
+    document.body.appendChild(downloadLink);  
+    downloadLink.click();  
+}  
+  
+//user-defined function to export the data to CSV file format  
+function exportTableToCSV(filename) {  
+   //declare a JavaScript variable of array type  
+   var csv = [];  
+   var rows = document.querySelectorAll("table tr");  
+   
+   //merge the whole data in tabular form   
+   for(var i=0; i<rows.length; i++) {  
+    var row = [], cols = rows[i].querySelectorAll("td, th");  
+    for( var j=0; j<cols.length; j++)  
+       row.push(cols[j].innerText);  
+    csv.push(row.join(","));  
+   }   
+   //call the function to download the CSV file  
+   downloadCSV(csv.join("\n"), filename);  
+} 
+</script>
+</body></html>
+<!-- /fin de la fila -->
